@@ -3,6 +3,8 @@
 基于 **Wi-Fi CSI（信道状态信息）** 的室内人体存在/活动感知演示系统：在房间里按点位走一遍采集流程，系统自动训练模型并生成**信号强度热力图**。面向竞赛评审与教学演示设计，**零命令行、全流程网页操作**。
 
 > 第三届"兴智杯"参赛作品 · 配套 [ESPectre](https://github.com/francescopace/espectre) 固件/采集器使用
+>
+> 🌐 **线上展示页**：https://carrotsoup123456.github.io/wifi-heatmap/
 
 ## 功能一览
 
