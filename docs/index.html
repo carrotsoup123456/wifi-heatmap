@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wi-Fi 热力图 · 一键采集网站</title>
+<meta name="description" content="基于 Wi-Fi CSI 的室内感知演示系统：网页引导式采集、建模与热力图生成。第三届兴智杯参赛作品。">
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6474; --paper:#f7f4ee; --card:#ffffff;
+    --accent:#d9481f; --accent-soft:#fdeee6; --line:#e5ded2;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+       background:var(--paper);color:var(--ink);line-height:1.7}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px}
+  /* Hero */
+  header.hero{padding:88px 0 56px;border-bottom:1px solid var(--line)}
+  .kicker{font-size:14px;letter-spacing:.2em;color:var(--accent);font-weight:600}
+  h1{font-family:Georgia,"Songti SC",serif;font-size:clamp(34px,6vw,54px);line-height:1.2;margin:14px 0 18px}
+  .sub{font-size:18px;color:var(--muted);max-width:640px}
+  .cta{margin-top:32px;display:flex;gap:14px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:12px 26px;border-radius:999px;text-decoration:none;font-weight:600;font-size:15px}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.ghost{border:1.5px solid var(--ink);color:var(--ink)}
+  /* Sections */
+  section{padding:56px 0}
+  h2{font-family:Georgia,"Songti SC",serif;font-size:28px;margin-bottom:8px}
+  .lead{color:var(--muted);margin-bottom:28px}
+  /* 四步 */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .step .num{font-family:Georgia,serif;font-size:26px;color:var(--accent)}
+  .step h3{font-size:16px;margin:6px 0 4px}
+  .step p{font-size:14px;color:var(--muted)}
+  /* 图 */
+  figure{margin:0 0 20px}
+  figure img{width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;display:block}
+  figcaption{font-size:13px;color:var(--muted);text-align:center;margin-top:8px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden;font-size:15px}
+  th,td{padding:12px 16px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{background:var(--accent-soft);color:var(--accent);font-weight:700}
+  tbody tr:last-child td{border-bottom:none}
+  .best{color:var(--accent);font-weight:700}
+  /* 特性 */
+  .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;font-size:14.5px}
+  .feat b{display:block;margin-bottom:4px;font-size:15.5px}
+  /* 代码 */
+  pre{background:#161b26;color:#d8dee9;border-radius:12px;padding:22px;overflow-x:auto;font-size:14px;line-height:1.6}
+  pre .c{color:#6b768c}
+  footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--muted);font-size:13.5px}
+  footer a{color:var(--accent)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">WI-FI CSI · 室内感知 · 兴智杯参赛作品</div>
+    <h1>Wi-Fi 热力图<br>一键采集网站</h1>
+    <p class="sub">在房间里按点位走一遍，网页自动完成数据采集、模型训练，并生成信号强度热力图。零命令行、全流程引导，支持无硬件的演示模式。</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/carrotsoup123456/wifi-heatmap">查看源码 · GitHub</a>
+      <a class="btn ghost" href="#quickstart">快速开始</a>
+    </div>
+  </header>
+
+  <section>
+    <h2>四步，从空房间到热力图</h2>
+    <p class="lead">网站把整条数据管线包装成引导式流程，每一步就是一个按钮。</p>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><h3>房型配置</h3><p>输入房间尺寸与路由器位置，自动布设测点（间距 1m，最多 100 点），支持 L 型等自定义房型。</p></div>
+      <div class="step"><div class="num">02</div><h3>数据采集</h3><p>逐批采集，每点落盘 + 原子写入；崩溃可续采，随时打包下载（含进度清单）。</p></div>
+      <div class="step"><div class="num">03</div><h3>数据整理</h3><p>一键汇总 npz → 特征数据集；采满 4 点即可先试跑看效果。</p></div>
+      <div class="step"><div class="num">04</div><h3>建模出图</h3><p>IDW / 路径损耗 / GPR 三模型对比，输出预测热力图、实测对比与评估报告。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>成果展示</h2>
+    <p class="lead">演示房间 6.6m × 7.7m，56 个测点（训练 45 / 留出验证 11）。</p>
+    <div class="grid2">
+      <figure><img src="assets/热力图_预测.png" alt="预测热力图"><figcaption>路径损耗模型重建的信号强度热力图</figcaption></figure>
+      <figure><img src="assets/热力图_对比.png" alt="实测与预测对比"><figcaption>留出点位实测值 vs 模型预测值</figcaption></figure>
+    </div>
+    <div class="grid2">
+      <figure><img src="assets/采集点位图.png" alt="采集点位图"><figcaption>自动生成的 56 个测点布局</figcaption></figure>
+      <figure><img src="assets/示例_三模型对比.png" alt="三模型对比"><figcaption>IDW / 路径损耗 / GPR 三模型重建对比</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>留出验证精度</h2>
+    <p class="lead">11 个未参与建模的点位上的预测表现（单位 dBm，越低越好）。</p>
+    <table>
+      <thead><tr><th>模型</th><th>MAE</th><th>RMSE</th><th>R²</th></tr></thead>
+      <tbody>
+        <tr><td>IDW</td><td>2.899</td><td>6.392</td><td>0.536</td></tr>
+        <tr><td>路径损耗</td><td class="best">0.470</td><td class="best">0.637</td><td class="best">0.995</td></tr>
+        <tr><td>GPR</td><td>1.620</td><td>3.442</td><td>0.865</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>为演示与落地而生</h2>
+    <p class="lead">评委没有硬件也能看完整流程；接上板子，同一套界面就是真实采集工具。</p>
+    <div class="feats">
+      <div class="feat"><b>🎭 演示 / 真实双模式</b>无硬件时生成模拟数据跑通全流程；填入 ESP32 板子 IP 即切换真实采集。</div>
+      <div class="feat"><b>🔥 浏览器内一键烧录</b>WebSerial + esptool-js 直接烧固件，Improv Serial 协议配 Wi-Fi，全程不用装烧录工具。</div>
+      <div class="feat"><b>💾 数据实时保存</b>每点落盘、原子写入、断点续采；任意时刻可下载数据包，文件名自带房型/进度/时间。</div>
+      <div class="feat"><b>📄 成果即文档</b>自动产出评估报告、测点汇总表与<a href="assets/手动采集步骤图.html">手动采集步骤图</a>，可直接交付。</div>
+    </div>
+  </section>
+
+  <section id="quickstart">
+    <h2>快速开始</h2>
+    <p class="lead">Python 3.10+，演示模式开箱即用。</p>
+    <pre><span class="c"># 克隆（含 ESPectre 子模块）</span>
+git clone --recursive https://github.com/carrotsoup123456/wifi-heatmap.git
+cd wifi-heatmap
+
+<span class="c"># 环境 & 启动</span>
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python web/app.py        <span class="c"># 打开 http://127.0.0.1:8000</span></pre>
+  </section>
+
+  <footer>
+    <p>基于 <a href="https://github.com/francescopace/espectre">ESPectre</a>（GPLv3）固件与采集器 · 烧录组件 <a href="https://github.com/espressif/esptool-js">esptool-js</a>（Apache-2.0）· 本站代码 MIT</p>
+    <p>演示模式下的信号与误差数据为模拟生成，仅用于流程演示 · © 2026 Bokang Liu</p>
+  </footer>
+
+</div>
+</body>
+</html>

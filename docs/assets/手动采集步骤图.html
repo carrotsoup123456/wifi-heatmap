@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手动采集步骤图 · Wi-Fi 热力图</title>
+<style>
+  :root {
+    --bg: #f5f5f7; --card: #ffffff; --border: rgba(0,0,0,.07);
+    --text: #1d1d1f; --muted: #86868b;
+    --blue: #0a84ff; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
+    --grad: linear-gradient(135deg, #0a84ff, #5e5ce6);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background:
+      radial-gradient(600px 400px at 10% -5%, rgba(10,132,255,.15), transparent 60%),
+      radial-gradient(700px 500px at 60% -10%, rgba(191,90,242,.12), transparent 60%),
+      var(--bg);
+    color: var(--text); line-height: 1.7; padding: 40px 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 860px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 36px; }
+  header h1 {
+    font-size: 32px; font-weight: 800;
+    background: var(--grad);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  header p { color: var(--muted); margin-top: 8px; font-size: 15px; }
+
+  /* ===== 重要提示框 ===== */
+  .alert {
+    background: linear-gradient(135deg, rgba(255,159,10,.1), rgba(255,55,95,.07));
+    border: 1px solid rgba(255,159,10,.35);
+    border-radius: 18px; padding: 22px 26px; margin-bottom: 36px;
+  }
+  .alert h2 { font-size: 17px; color: #c77700; margin-bottom: 10px; }
+  .alert ul { padding-left: 20px; font-size: 14px; }
+  .alert li { margin: 6px 0; }
+  .alert b { color: var(--text); }
+  .alert .best {
+    display: inline-block; background: var(--green); color: #fff;
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-right: 4px;
+  }
+
+  /* ===== 时间线步骤 ===== */
+  .steps { position: relative; padding-left: 46px; }
+  .steps::before {
+    content: ""; position: absolute; left: 17px; top: 8px; bottom: 8px;
+    width: 3px; border-radius: 2px;
+    background: linear-gradient(180deg, #0a84ff, #5e5ce6, #bf5af2, #30d158);
+  }
+  .step { position: relative; margin-bottom: 22px; }
+  .step-no {
+    position: absolute; left: -46px; top: 18px;
+    width: 37px; height: 37px; border-radius: 50%;
+    background: var(--card); border: 3px solid var(--blue);
+    color: var(--blue); font-weight: 800; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 10px rgba(10,132,255,.25);
+  }
+  .step.once .step-no { border-color: var(--orange); color: var(--orange); box-shadow: 0 2px 10px rgba(255,159,10,.25); }
+  .step.loop .step-no { border-color: var(--green); color: #1d9d47; box-shadow: 0 2px 10px rgba(48,209,88,.25); }
+  .step-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 18px 22px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.05);
+  }
+  .step-card h3 { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tag {
+    font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff;
+  }
+  .tag-once { background: var(--orange); }
+  .tag-loop { background: var(--green); }
+  .tag-cmd  { background: var(--blue); }
+  .step-card p { font-size: 14px; color: #48484a; margin-top: 6px; }
+
+  .cmd {
+    margin-top: 10px; background: #1d1d1f; color: #e8e8ed;
+    border-radius: 12px; padding: 13px 16px;
+    font-family: "SF Mono", Menlo, monospace; font-size: 13px;
+    overflow-x: auto; white-space: pre;
+  }
+  .cmd .c { color: #86868b; }                       /* 注释 */
+  .cmd .v { color: #64d2ff; }                       /* 要替换的值 */
+  .expect {
+    margin-top: 8px; font-size: 13px; color: var(--muted);
+    background: rgba(120,120,128,.08); border-radius: 10px; padding: 8px 14px;
+  }
+  .expect b { color: #1d9d47; }
+  .tip { margin-top: 8px; font-size: 13px; color: #c77700; }
+
+  .map-img { margin-top: 12px; text-align: center; }
+  .map-img img { max-width: 340px; border-radius: 12px; border: 1px solid var(--border); }
+  .map-img div { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 36px; }
+
+  @media print {
+    body { background: #fff; padding: 10px; }
+    .step-card, .alert { box-shadow: none; break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>手动采集步骤图</h1>
+  <p>Wi-Fi 热力图 · 单板 · 原始命令行流程 · 全程约 35 分钟（25 点 × 60 秒 + 摆点时间）</p>
+</header>
+
+<!-- ===== 供电与干扰（先读） ===== -->
+<div class="alert">
+  <h2>⚠ 动手前必读：供电与摆放（直接影响数据质量）</h2>
+  <ul>
+    <li><span class="best">推荐</span><b>用充电宝给板子供电</b>，不要用旁边的笔记本电脑。笔记本是个大金属块、还自带 Wi-Fi 射频，贴着板子会遮挡和反射信号；充电宝射频干净，放地上即可。</li>
+    <li>如果只能用笔记本供电：<b>每次都保持完全一样的相对位置</b>——笔记本放板子同一侧、同一距离（≥ 50 cm 更好）、屏幕同一角度。偏差固定，模型能吸收；忽近忽远才会污染数据。</li>
+    <li>每个点采集的 60 秒里，<b>人离开房间或站到房间外</b>；25 个点都要这样做。人体含水，是最强的干扰源。</li>
+    <li>板子在每个点的<b>朝向保持一致</b>（比如 USB 口始终朝门口）。</li>
+    <li>路由器和电脑全程别挪动；电脑和板子连<b>同一个 Wi-Fi</b>。</li>
+  </ul>
+</div>
+
+<div class="steps">
+
+  <!-- 1 -->
+  <div class="step once">
+    <div class="step-no">1</div>
+    <div class="step-card">
+      <h3>烧录固件 <span class="tag tag-once">只做一次</span></h3>
+      <p>板子用 USB 连电脑，浏览器打开 ESPectre 在线烧录工具，选 ESP32-C6 按提示烧录（需要 Chrome/Edge）。</p>
+      <div class="cmd">https://espectre.dev/tools/flash/</div>
+      <div class="expect"><b>完成标志：</b>工具显示烧录成功，板子自动重启。</div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="step once">
+    <div class="step-no">2</div>
+    <div class="step-card">
+      <h3>配网 <span class="tag tag-once">只做一次</span></h3>
+      <p>打开配网工具，让板子连上你家的 Wi-Fi（和电脑同一个）。</p>
+      <div class="cmd">https://espectre.dev/tools/device-settings/</div>
+      <div class="expect"><b>完成标志：</b>板子拿到 IP 地址，和电脑在同一网段。</div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="step">
+    <div class="step-no">3</div>
+    <div class="step-card">
+      <h3>打开终端，进入项目目录</h3>
+      <div class="cmd">cd ~/Desktop/deepworks项目/Wi-Fi热力图</div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="step">
+    <div class="step-no">4</div>
+    <div class="step-card">
+      <h3>环境自检 <span class="tag tag-cmd">命令</span></h3>
+      <div class="cmd">bash scripts/01_check_env.sh</div>
+      <div class="expect"><b>通过标准：</b>全部 PASS。设备那行显示 WARN（没插板子/没找到设备）不影响后面，第 5 步会再找一次。</div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="step">
+    <div class="step-no">5</div>
+    <div class="step-card">
+      <h3>找到板子的 IP <span class="tag tag-cmd">命令</span></h3>
+      <p>板子已上电（接充电宝）、已配网：</p>
+      <div class="cmd">tools/espectre/espectre devices</div>
+      <div class="expect"><b>看到：</b><b>ip=192.168.x.x</b> 这样一行，把 IP 抄下来。找不到就确认电脑和板子在同一 Wi-Fi，等 20 秒再跑一次。</div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="step loop">
+    <div class="step-no">6</div>
+    <div class="step-card">
+      <h3>把板子摆到测点 P11 <span class="tag tag-loop">之后每点重复</span></h3>
+      <p>对照点位图，P11 是离路由器最近那个格子的中心（x≈0.83 m, y≈0.77 m）。用卷尺量，尽量准。</p>
+      <div class="map-img">
+        <img src="采集点位图.png" alt="采集点位图">
+        <div>outputs/采集点位图.png（建议提前打印出来带着）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="step loop">
+    <div class="step-no">7</div>
+    <div class="step-card">
+      <h3>采集这个点 <span class="tag tag-loop">之后每点重复</span> <span class="tag tag-cmd">命令</span></h3>
+      <div class="cmd">bash scripts/02_collect_point.sh P11 <span class="v">192.168.x.x</span>  <span class="c"># 把 IP 换成第 5 步抄的</span></div>
+      <p>按下回车后：<b>立刻离开房间</b>。脚本自动采 60 秒（约 6000 个数据包），采完自动归档。</p>
+      <div class="expect"><b>成功标志：</b>末尾显示 <b>本次新增 1 个数据文件</b>，并提示"把板子移到下一个测点"。</div>
+      <div class="tip">提示不满足静止条件（ready gate）= 房间里有人/宠物在动，清场后重跑这条命令。</div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="step loop">
+    <div class="step-no">8</div>
+    <div class="step-card">
+      <h3>走完 25 个点 <span class="tag tag-loop">循环</span></h3>
+      <p>顺序：P11→P12→P13→P14→P21→…→P54→V01→…→V05（就是 03 脚本的顺序，少走回头路）。每个点都是：<b>摆板子 → 跑第 7 步那条命令（换个点名）→ 离开 → 等 60 秒</b>。</p>
+      <div class="tip">偷懒版：直接跑 <b>bash scripts/03_collect_round.sh <span class="v">192.168.x.x</span> r1</b>，它会逐批提示你摆哪个点，摆好按回车即可，不用记命令。</div>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="step">
+    <div class="step-no">9</div>
+    <div class="step-card">
+      <h3>整理数据 <span class="tag tag-cmd">命令</span></h3>
+      <p>25 个点全部采完后：</p>
+      <div class="cmd">tools/espectre/.venv/bin/python scripts/04_build_dataset.py</div>
+      <div class="expect"><b>成功标志：</b>显示 25/25 个测点齐全，生成 <b>outputs/测点汇总表.csv</b>。</div>
+    </div>
+  </div>
+
+  <!-- 10 -->
+  <div class="step">
+    <div class="step-no">10</div>
+    <div class="step-card">
+      <h3>训练并出热力图 <span class="tag tag-cmd">命令</span></h3>
+      <div class="cmd">tools/espectre/.venv/bin/python scripts/05_train_and_plot.py</div>
+      <div class="expect"><b>成功标志：</b>生成 <b>outputs/热力图_预测.png</b> 和 <b>outputs/热力图_对比.png</b>、<b>模型评估报告.md</b>。</div>
+    </div>
+  </div>
+
+  <!-- 11 -->
+  <div class="step">
+    <div class="step-no">11</div>
+    <div class="step-card">
+      <h3>看结果</h3>
+      <p>双击打开 <b>outputs/热力图_预测.png</b>：红色 = 信号强（离路由器近），蓝色 = 信号弱。红星是路由器位置，黑圈是训练点，红三角是训练脚本随机留出的验证点。</p>
+      <div class="expect"><b>合理的样子：</b>颜色从路由器墙角向外均匀渐变。如果某处突变/斑块，回看该处附近测点的数据质量（汇总表里 packets 数是否明显偏少）。</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Wi-Fi 热力图 · 手动采集步骤图 · 与网页版（scripts/07_start_web.sh）流程完全等价</footer>
+
+</div>
+</body>
+</html>
