@@ -141,6 +141,8 @@ body::before {
 a.btn { text-decoration: none; text-align: center; display: inline-block; box-sizing: border-box; }
 
 /* 烧录部分 */
+.flash-open-btn { width: 100%; padding: 15px 18px; font-size: 15.5px; font-weight: 700;
+  border-radius: 14px; letter-spacing: .02em; margin-bottom: 14px; }
 .flash-summary { cursor: pointer; list-style: none; }
 .flash-summary::-webkit-details-marker { display: none; }
 .flash-sub { font-size: 12px; font-weight: 400; margin-left: 6px; }

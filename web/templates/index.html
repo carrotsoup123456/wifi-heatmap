@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wi-Fi 热力图 · 一键采集平台</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261016k">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261016m">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
   <!-- 左栏：烧录（首次）+ 设备 + 采集控制 -->
   <section class="col col-left">
 
+    <button id="btn-open-flash" class="btn btn-accent flash-open-btn">🔥 首次使用？点这里「开始烧录 / 配网」</button>
     <details class="card flash-card">
       <summary class="card-head flash-summary">
         <h2><span class="step-no">0</span> 烧录部分 <span class="muted flash-sub">一键烧录 + 配网，每块板首次各做一次</span></h2>
@@ -291,7 +292,7 @@ source ~/esp/esp-idf/export.sh
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}?v=20261016l"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261016m"></script>
 <script type="module" src="{{ url_for('static', filename='flash.js') }}?v=20261016k"></script>
 </body>
 </html>

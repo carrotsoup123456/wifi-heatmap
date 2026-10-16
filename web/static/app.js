@@ -697,6 +697,20 @@ setInterval(refresh, 500);
 refresh(true);
 loadLayout();
 
+/* ===== 烧录面板引导按钮（折叠时显示醒目入口，展开后隐藏） ===== */
+(function () {
+  const det = document.querySelector(".flash-card");
+  const btn = document.getElementById("btn-open-flash");
+  if (!det || !btn) return;
+  const sync = () => { btn.style.display = det.open ? "none" : ""; };
+  btn.addEventListener("click", () => {
+    det.open = true;
+    det.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  det.addEventListener("toggle", sync);
+  sync();
+})();
+
 /* ===== 使用说明弹窗 ===== */
 (function () {
   const fab = document.getElementById("help-fab");
