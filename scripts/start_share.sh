@@ -1,16 +1,18 @@
 #!/bin/bash
-# 启动「固定网址共享」：userspace 模式的 tailscaled + Funnel（443 → 本机 8000）
-# Mac 重启后跑一次即可；平时 tailscaled 常驻就不用管。
-# 前提：已 brew install tailscale，且首次已按提示完成登录与 Funnel 授权。
+# 固定网址共享：tailscaled（userspace 模式）已注册为 LaunchAgent，登录后自动启动、
+# 崩溃自动拉起，平时无需运行本脚本。仅当代理未加载时手动恢复用：
+#   bash scripts/start_share.sh
 set -e
 TS_DIR="$HOME/.local/state/tailscale"
-mkdir -p "$TS_DIR"
+PLIST="$HOME/Library/LaunchAgents/com.liubokang.tailscaled-userspace.plist"
+LABEL="com.liubokang.tailscaled-userspace"
+UID_NOW=$(id -u)
 
-if ! pgrep -f "tailscaled --tun=userspace" >/dev/null; then
-  echo "启动 tailscaled（userspace 模式）..."
-  nohup tailscaled --tun=userspace-networking --statedir "$TS_DIR" \
-       --socket "$TS_DIR/tailscaled.sock" > "$TS_DIR/daemon.log" 2>&1 &
-  sleep 3
+if ! launchctl print "gui/$UID_NOW/$LABEL" >/dev/null 2>&1; then
+  echo "加载 LaunchAgent..."
+  mkdir -p "$TS_DIR"
+  launchctl bootstrap "gui/$UID_NOW" "$PLIST"
+  sleep 4
 fi
 
 tailscale --socket "$TS_DIR/tailscaled.sock" funnel --bg --https=443 8000 >/dev/null
