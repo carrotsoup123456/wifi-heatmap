@@ -34,12 +34,13 @@ async function manifest() {
 }
 const chipKey = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, ""); // "ESP32-S3" → "esp32s3"
 
-async function fetchFirmware(key) {
+async function fetchFirmware(key, chipName) {
   const man = await manifest();
   const meta = man.chips[key];
   if (!meta) {
     const supported = Object.values(man.chips).map((c) => c.label).join(" / ");
-    throw new Error("这个芯片型号暂不支持（支持：" + supported + "）");
+    throw new Error("识别到的是「" + chipName + "」，不在支持列表里（支持：" + supported +
+      "）。注意：ESP32-C2/ESP8684、H2、P4 这些型号没有 CSI 功能，无法用于采集，需要换 C3/C6/S3 等板子。");
   }
   const r = await fetch("/static/firmware/" + meta.file);
   if (!r.ok) throw new Error("固件文件读取失败");
@@ -71,7 +72,7 @@ async function oneClickFlash() {
     const chipName = await loader.main();
     setStatus(st, "识别到 " + chipName + "，读取并校验固件…", "muted");
 
-    const fw = await fetchFirmware(chipKey(chipName));
+    const fw = await fetchFirmware(chipKey(chipName), chipName);
     setStatus(st, "正在烧录 " + chipName + "（固件 v" + fw.version + "），不要拔线…", "muted");
     await loader.writeFlash({
       fileArray: [{ data: fw.data, address: 0x0 }],
