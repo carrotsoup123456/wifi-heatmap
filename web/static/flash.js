@@ -32,7 +32,13 @@ async function manifest() {
   }
   return _manifest;
 }
-const chipKey = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, ""); // "ESP32-S3" → "esp32s3"
+// 芯片名归一化：兼容带封装/修订后缀的名字，如 "ESP32-C6 (QFN40)" → "esp32c6"
+// 顺序注意：长型号在前，避免 "esp32c6…" 被 "esp32" 前缀抢先匹配
+const _KNOWN_CHIPS = ["esp32c3", "esp32c5", "esp32c6", "esp32s2", "esp32s3", "esp32"];
+const chipKey = (name) => {
+  const k = (name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return _KNOWN_CHIPS.find((x) => k.startsWith(x)) || k;
+};
 
 async function fetchFirmware(key, chipName) {
   const man = await manifest();
