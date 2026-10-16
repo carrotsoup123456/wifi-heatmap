@@ -1,0 +1,42 @@
+{
+ "version": "3.0.0",
+ "frontend": "native",
+ "chips": {
+  "esp32": {
+   "file": "espectre-native-3.0.0-esp32.bin",
+   "sha256": "8d95e381ece4a4c7b282cf0ebc3ce168d70a9218bc385d94a995583452898288",
+   "size": 4194304,
+   "label": "ESP32"
+  },
+  "esp32c3": {
+   "file": "espectre-native-3.0.0-esp32c3.bin",
+   "sha256": "fa411e460324b4df0cdf75a466c84dd8731e100c9e66caaa7785cead8196d30b",
+   "size": 4194304,
+   "label": "ESP32-C3"
+  },
+  "esp32c5": {
+   "file": "espectre-native-3.0.0-esp32c5.bin",
+   "sha256": "7d0d5fcb99342ac865065781e1736052193587881693993ae479a6bc0a118c3c",
+   "size": 4194304,
+   "label": "ESP32-C5"
+  },
+  "esp32c6": {
+   "file": "espectre-native-3.0.0-esp32c6.bin",
+   "sha256": "f5193b94b8fa7901017652d2889bb38b653f63849a79aced9767ad93ba36d1ac",
+   "size": 4194304,
+   "label": "ESP32-C6"
+  },
+  "esp32s2": {
+   "file": "espectre-native-3.0.0-esp32s2.bin",
+   "sha256": "cfe547ee0eb2ba50f77fe20b3dd5907b7943e0755f83b96dafe41d901cb8192d",
+   "size": 4194304,
+   "label": "ESP32-S2"
+  },
+  "esp32s3": {
+   "file": "espectre-native-3.0.0-esp32s3.bin",
+   "sha256": "4b248241e9a605928b705c77c74faa2adc6f53ac04f0d528078d532b217e61d5",
+   "size": 4194304,
+   "label": "ESP32-S3"
+  }
+ }
+}

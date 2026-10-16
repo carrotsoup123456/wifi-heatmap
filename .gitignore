@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 系统/工具
+.DS_Store
+.deepworks/
+.opencode/
+opencode.jsonc
+
+# 采集数据与运行时状态（演示数据可随时重新生成，不入库）
+data/
+tools/espectre/data/
+
+# 固件二进制（约 24MB，GPLv3，用 scripts/download_firmware.py 拉取并校验）
+web/static/firmware/*.bin
+
+# 用户上传的私人文件
+uploads/

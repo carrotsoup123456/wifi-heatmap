@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Wi-Fi 热力图 · 数据采集操作手册</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei", sans-serif;
+    color: #1f2328; line-height: 1.75; font-size: 10.5pt; margin: 0;
+  }
+  h1 { font-size: 22pt; margin: 0 0 6px; letter-spacing: -0.5px; }
+  h2 {
+    font-size: 14pt; margin: 30px 0 12px; padding: 7px 0 7px 12px;
+    border-left: 5px solid #1a73e8; background: #f1f6fe;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 11.5pt; margin: 20px 0 8px; color: #174ea6; page-break-after: avoid; }
+  p { margin: 8px 0; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #f0f1f3; padding: 1.5px 5px; border-radius: 3px;
+    font-size: 9.2pt; color: #b3261e;
+  }
+  pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #16181d; color: #e6e6e6; padding: 12px 14px; border-radius: 6px;
+    font-size: 9pt; line-height: 1.6; overflow-wrap: anywhere;
+    white-space: pre-wrap; page-break-inside: avoid; margin: 10px 0;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: 9pt; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 9.5pt; }
+  th, td { border: 1px solid #d5d8dc; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #f1f3f5; font-weight: 600; }
+  tr { page-break-inside: avoid; }
+  .cover {
+    border: 2px solid #1a73e8; border-radius: 8px; padding: 26px 28px;
+    margin-bottom: 8px; background: linear-gradient(135deg, #f8fbff 0%, #eef4fe 100%);
+  }
+  .cover .sub { color: #5f6368; font-size: 11pt; margin: 4px 0 18px; }
+  .kv { display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 9.5pt; }
+  .kv div { white-space: nowrap; }
+  .kv b { color: #174ea6; font-weight: 600; }
+  .note, .warn, .tip {
+    border-radius: 6px; padding: 10px 14px; margin: 12px 0; font-size: 9.8pt;
+    page-break-inside: avoid;
+  }
+  .note { background: #f1f6fe; border-left: 4px solid #1a73e8; }
+  .warn { background: #fef7f0; border-left: 4px solid #e8710a; }
+  .tip  { background: #f0f9f2; border-left: 4px solid #1e8e3e; }
+  .note b, .warn b, .tip b { display: inline; }
+  img { width: 100%; border: 1px solid #e0e0e0; border-radius: 6px; margin: 8px 0; }
+  .figcap { font-size: 9pt; color: #5f6368; text-align: center; margin: -4px 0 16px; }
+  .pagebreak { page-break-before: always; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .toc { font-size: 10pt; }
+  .toc li { margin: 3px 0; }
+  .step-num {
+    display: inline-block; background: #1a73e8; color: #fff; width: 22px; height: 22px;
+    line-height: 22px; text-align: center; border-radius: 50%; font-size: 10pt;
+    font-weight: 600; margin-right: 8px;
+  }
+  .small { font-size: 9pt; color: #5f6368; }
+  .mono-table td, .mono-table th { font-family: "SF Mono", Menlo, monospace; font-size: 8.6pt; }
+</style>
+</head>
+<body>
+
+<!-- ================= 封面 ================= -->
+<div class="cover">
+  <h1>Wi-Fi 热力图 · 数据采集操作手册</h1>
+  <p class="sub">用 ESP32-C6 采集无线信号，重建整个房间的信号强度分布</p>
+  <div class="kv">
+    <div><b>房间尺寸</b> 6.62 m × 7.74 m（51.2 m²，空房间）</div>
+    <div><b>路由器</b> 1 台，固定在墙角</div>
+    <div><b>采集板</b> ESP32-C6 × 2</div>
+    <div><b>测点总数</b> 25 个（20 训练 + 5 验证）</div>
+    <div><b>分区方式</b> 4 列 × 5 行 = 20 块</div>
+    <div><b>单点耗时</b> 约 60 秒</div>
+  </div>
+</div>
+<p class="small" style="text-align:right">编制日期：2026-10-15　|　工具版本：ESPectre CLI (git 899a3fb)</p>
+
+<h2>这套流程一共就三步</h2>
+<table>
+  <tr><th style="width:22%">阶段</th><th style="width:34%">你要做的事</th><th>最后得到</th></tr>
+  <tr>
+    <td><b>① 采</b></td>
+    <td>把板子依次放到 25 个标记好的位置，每个位置采 60 秒</td>
+    <td><code>data/points/&lt;测点&gt;/*.npz</code> 原始信号文件</td>
+  </tr>
+  <tr>
+    <td><b>② 整</b></td>
+    <td>跑一条命令，把散落的小文件汇总成一张表</td>
+    <td><code>outputs/测点汇总表.csv</code></td>
+  </tr>
+  <tr>
+    <td><b>③ 画</b></td>
+    <td>再跑一条命令，用 20 个点推测整个房间的颜色</td>
+    <td><code>outputs/热力图_预测.png</code></td>
+  </tr>
+</table>
+
+<p><b>核心思路：</b>信号在房间里不是到处一样的——离路由器越远越弱，角落最弱。但只要在 20 个位置测过，模型就能推测出没测过的位置大概是多少，然后画成一张彩色图。这就是"热力图"。</p>
+
+<h3>目录</h3>
+<ol class="toc">
+  <li>需要准备什么</li>
+  <li>已经装好的环境（先验证一下）</li>
+  <li>第一步：把路由器固定死</li>
+  <li>第二步：划分区块、贴胶带</li>
+  <li>第三步：给 ESP32-C6 烧录固件、连上 Wi-Fi</li>
+  <li>第四步：采集数据（重点）</li>
+  <li>第五步：整理数据</li>
+  <li>第六步：生成热力图</li>
+  <li>常见问题排查</li>
+  <li>附录 A：25 个测点坐标表</li>
+  <li>附录 B：命令速查</li>
+</ol>
+
+<!-- ================= 1 ================= -->
+<h2 class="pagebreak">1. 需要准备什么</h2>
+
+<table>
+  <tr><th style="width:24%">物品</th><th style="width:14%">数量</th><th>说明</th></tr>
+  <tr><td>ESP32-C6 开发板</td><td>2 块</td><td>任意 C6 开发板均可（如 ESP32-C6-DevKitC）</td></tr>
+  <tr><td>USB 数据线</td><td>2 条</td><td>必须能传数据，不能是纯充电线。烧录和供电都要用</td></tr>
+  <tr><td>路由器</td><td>1 台</td><td>只要能开 2.4 GHz Wi-Fi 就行，越普通越好（信号太强反而不利于区分位置）</td></tr>
+  <tr><td>卷尺</td><td>1 把</td><td>5 m 以上，用来量区块边界</td></tr>
+  <tr><td>美纹纸胶带</td><td>1 卷</td><td>在地上贴出格子，方便每次摆到同一个位置</td></tr>
+  <tr><td>Mac 电脑</td><td>1 台</td><td>环境已经配好，见第 2 节</td></tr>
+</table>
+
+<div class="tip">
+<b>为什么用美纹纸：</b>这个项目最大的误差来源不是设备，而是"每次板子摆的位置不一样"。在地上贴出格子、每次都摆到格子正中心，比换设备、换算法有用得多。
+</div>
+
+<h3>时间估算</h3>
+<p>双板并行，25 个测点约 <b>20 分钟</b>一轮。建议一共采集 <b>3 轮</b>（不同时间段，比如上午 / 下午 / 晚上），总计约 1 小时。多轮数据能明显提升模型稳定性。</p>
+
+<!-- ================= 2 ================= -->
+<h2>2. 已经装好的环境（先验证一下）</h2>
+
+<p>以下东西已经在这台 Mac 上装好了，你不需要再装：</p>
+
+<table>
+  <tr><th style="width:34%">组件</th><th>位置 / 版本</th></tr>
+  <tr><td>Google Chrome</td><td>已安装。烧录固件必须用它（Safari 不支持 WebSerial）</td></tr>
+  <tr><td>ESPectre 工具</td><td><code>tools/espectre/</code>（官方仓库，CLI 版本 git 899a3fb）</td></tr>
+  <tr><td>Python 环境</td><td><code>tools/espectre/.venv/</code>（含 numpy / matplotlib / scikit-learn）</td></tr>
+</table>
+
+<div class="warn">
+<b>重点：</b>所有 Python 脚本都必须用虚拟环境里的解释器运行，也就是写 <code>tools/espectre/.venv/bin/python</code>，<b>不要</b>直接写 <code>python3</code>——系统自带的 Python 没装这些库，会报错。
+</div>
+
+<h3>验证命令</h3>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图
+bash scripts/01_check_env.sh</code></pre>
+<p>这个脚本会依次检查：Chrome 在不在、ESPectre CLI 能不能跑、虚拟环境有没有装齐、本机 Wi-Fi 网段是多少、有没有插着 ESP32 板子。哪一项显示 <code>[!]</code> 就照提示处理。</p>
+
+<!-- ================= 3 ================= -->
+<h2 class="pagebreak">3. 第一步：把路由器固定死</h2>
+
+<p>这一步只有一条规矩：<b>路由器一旦放好，整个项目期间就不能再移动，也不能改设置。</b>它一动，之前采的所有数据全部作废。</p>
+
+<div class="step-num">1</div><b>选位置：房间的一个墙角。</b>
+<p>手册里假定路由器在左下角。我们把那个角定为坐标原点 <code>(0, 0)</code>，实际摆放时把它放在离两面墙各约 30 cm 的位置（避免紧贴墙面导致信号反射异常），即 <code>(0.30, 0.30)</code>。</p>
+
+<div class="note">
+<b>坐标系约定（后面所有表格都用这个）：</b><br>
+· 原点 = 路由器那一侧的墙角<br>
+· x 轴 = 房间<b>宽</b>方向，总共 6.62 m<br>
+· y 轴 = 房间<b>长</b>方向，总共 7.74 m<br>
+· 板子插上电后，坐标 <code>(x, y)</code> 表示它离两面墙的距离（米）
+</div>
+
+<div class="step-num">2</div><b>调整路由器设置（只有这几项，做完就不要再动）</b>
+<table>
+  <tr><th style="width:30%">设置项</th><th style="width:24%">设成</th><th>原因</th></tr>
+  <tr><td>2.4 GHz 频段</td><td>开启</td><td>ESP32-C6 只在 2.4 GHz 上工作</td></tr>
+  <tr><td>信道</td><td>固定在 1 / 6 / 11 之一</td><td>自动信道会在采集过程中跳频，数据前后不可比</td></tr>
+  <tr><td>信道带宽</td><td>20 MHz</td><td>带宽越大越容易受邻居干扰</td></tr>
+  <tr><td>发射功率</td><td>保持默认</td><td>调低会让远处测点信号弱到测不出</td></tr>
+</table>
+
+<div class="step-num">3</div><b>找出房间里的干扰源，采集时关掉。</b>
+<p>微波炉、无线耳机、蓝牙音箱、其他正在下载的设备，都会让数据抖动。采集期间请让房间保持安静、无人走动。</p>
+
+<!-- ================= 4 ================= -->
+<h2 class="pagebreak">4. 第二步：划分区块、贴胶带</h2>
+
+<h3>4.1 为什么要把房间分成格子</h3>
+<p>如果不分区，你可能会想"随便找几个地方测测就行"。问题是这样测出来的点分布不均匀，模型不知道该往哪个方向外推，画出来的热力图会有一块块的假色斑。</p>
+<p>把房间切成大小一致的格子，每个格子中心测一次，就能保证：<b>测点在空间上均匀铺开，模型在每个区域都有参考。</b></p>
+
+<h3>4.2 怎么分：4 列 × 5 行</h3>
+<table>
+  <tr><th style="width:26%">方向</th><th style="width:20%">房间长度</th><th style="width:16%">分几份</th><th>每一份是</th></tr>
+  <tr><td>x（宽 / 6.62 m）</td><td>6.62 m</td><td>4 份</td><td><b>1.655 m</b></td></tr>
+  <tr><td>y（长 / 7.74 m）</td><td>7.74 m</td><td>5 份</td><td><b>1.548 m</b></td></tr>
+</table>
+<p>4 × 5 = <b>20 个格子</b>。每个格子的尺寸约 1.66 m × 1.55 m——比一块板子大得多，所以摆板子的位置误差不会是主要问题。</p>
+
+<h3>4.3 三种点，作用不同</h3>
+<table>
+  <tr><th style="width:16%">类型</th><th style="width:14%">数量</th><th style="width:22%">摆在哪</th><th>作用</th></tr>
+  <tr>
+    <td><b>训练点</b><br>P11–P54</td><td>20 个</td>
+    <td>每个格子的<b>正中心</b></td>
+    <td>模型靠这 20 个点的数据学习"哪个位置信号多强"</td>
+  </tr>
+  <tr>
+    <td><b>验证点</b><br>V01–V05</td><td>5 个</td>
+    <td>格子之间的<b>交界处</b>（四条线交叉的位置）</td>
+    <td>这 5 个点<b>不参与训练</b>。训练完之后拿它们来考试：模型没见过的位置，猜得准不准？</td>
+  </tr>
+</table>
+
+<div class="tip">
+<b>为什么验证点要放在线上而不是格子中心：</b>如果验证点也放在格子中心，它跟最近的训练点只差不到 1 米，模型几乎等于"抄答案"，测不出真实水平。放在交界处，离最近的训练点约 1.1 米，才能真正考验模型。
+</div>
+
+<h3>4.4 现场怎么贴</h3>
+<ol>
+  <li>在路由器那一侧的墙角贴一条标记，作为原点。</li>
+  <li>沿着 x 方向（宽）量出 <b>1.655 m、3.31 m、4.965 m</b> 三个位置，从墙根一直贴到对面墙，共 <b>3 条竖线</b>。</li>
+  <li>沿着 y 方向（长）量出 <b>1.548 m、3.096 m、4.644 m、6.192 m</b> 四个位置，贴 <b>4 条横线</b>。</li>
+  <li>这样地面就出现了 20 个格子。在 <b>每个格子的正中心</b>贴一个小方块胶带，写成 P11、P12……（这就是训练点）。</li>
+  <li>在 <b>线交叉的位置</b>贴一个小三角，写成 V01……（这就是验证点，只有 5 个，位置见下表）。</li>
+</ol>
+
+<h3>4.5 点位图</h3>
+<img src="{{IMG_SITE_MAP}}" alt="房间分区与测点位置图">
+<p class="figcap">图 1　房间分区与测点位置。蓝点 = 20 个训练点，橙色三角 = 5 个验证点，红星 = 路由器。建议把这张图打印出来贴在墙上。</p>
+
+<p class="small">这张图可以直接重新生成（改了尺寸或分区就重跑一次）：<br>
+<code>tools/espectre/.venv/bin/python scripts/00_draw_site_map.py</code> → <code>outputs/采集点位图.png</code></p>
+
+<!-- ================= 5 ================= -->
+<h2 class="pagebreak">5. 第三步：给 ESP32-C6 烧录固件、连上 Wi-Fi</h2>
+
+<p>两块板子都要做一遍，步骤完全一样。</p>
+
+<div class="warn">
+<b>必须用 Chrome（或 Edge）。</b>Safari 和 Firefox 不支持网页烧录功能，会看不到"连接 USB 设备"的按钮。
+</div>
+
+<div class="step-num">1</div><b>接上板子</b>
+<p>用 USB 数据线把 ESP32-C6 插到 Mac 上。板子上通常有两颗按键，一颗标 <code>BOOT</code> 或 <code>IO9</code>，一颗标 <code>RESET</code> 或 <code>EN</code>。</p>
+
+<div class="step-num">2</div><b>打开烧录页面</b>
+<p>在 Chrome 里打开：<code>https://espectre.dev/tools/flash/</code></p>
+<p>点击页面上的 <b>Connect USB device</b>，在弹出的列表里选择你的板子（一般显示为 <code>USB JTAG/serial debug unit</code> 或 <code>CP2102</code> / <code>CH340</code> 之类）。</p>
+
+<div class="step-num">3</div><b>选择固件版本并烧录</b>
+<p>页面检测到芯片后会让你选版本：选 <b>Release</b>（正式版）。然后确认开始烧录，<b>烧录期间不要拔线、不要关网页</b>，等到板子自动重启。</p>
+
+<div class="note">
+<b>如果页面一直连不上板子：</b>让板子进入下载模式——按住 <code>BOOT</code> 不放 → 按一下 <code>RESET</code> → 松开 <code>BOOT</code> → 再点一次 Connect USB device。<br>
+<b>如果列表里一个设备都没有：</b>多半是数据线的问题，换一根（很多线只能充电不能传数据）。
+</div>
+
+<div class="step-num">4</div><b>填 Wi-Fi 账号密码</b>
+<p>烧录完成后页面会引导你填写 Wi-Fi 名称和密码（就是第 3 节里那台路由器）。填完提交，板子会重启并连上网络。</p>
+<div class="warn">
+路由器必须开着 <b>2.4 GHz</b>。如果你的路由器是"双频合一"，请到路由器设置里把它拆开，确保有一个独立的 2.4 GHz 网络名——ESP32-C6 连不上纯 5 GHz 的信号。
+</div>
+
+<div class="step-num">5</div><b>记下板子的 IP 地址</b>
+<p>Mac 和板子连到同一个 Wi-Fi 后，在项目目录下运行：</p>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图
+tools/espectre/.venv/bin/python tools/espectre/espectre devices</code></pre>
+<p>你会看到类似这样的输出：</p>
+<pre><code>Found 2 device(s):
+  esp32c6-xxxx   192.168.1.51   native
+  esp32c6-yyyy   192.168.1.52   native</code></pre>
+<p>把这两个 IP 记下来（比如 192.168.1.51 和 .52），后面采集要用。<b>建议在路由器管理页面里给这两块板绑定固定 IP</b>，否则重启后 IP 变了会连不上。</p>
+
+<div class="tip">
+<b>想让浏览器也能看到板子？</b>打开 <code>https://espectre.dev/tools/monitor/</code>，填入板子 IP，可以看到实时的 CSI 数据流和信号状态。采集前用这个页面确认板子工作正常，很方便。
+</div>
+
+<!-- ================= 6 ================= -->
+<h2 class="pagebreak">6. 第四步：采集数据（重点）</h2>
+
+<h3>6.1 先搞清楚"采集"到底在干什么</h3>
+<p>板子通过 Wi-Fi 不断收到路由器发来的信号包，每个包里都带着这趟传播的<b>信道状态信息（CSI）</b>——可以理解成"这趟信号一路上的详细体检报告"。板子把这些报告打包保存，就得到了这个位置、这个时刻的信号特征。</p>
+<p>我们要采集的核心数字是 <b>RSSI</b>（信号强度，单位 dBm），它是最直观的一条："这个位置信号有多强"。CSI 的细节数据也会一起存下来，作为备用。</p>
+
+<h3>6.2 一条完整的采集命令，逐项拆解</h3>
+<p>下面这条命令就是采一个测点的全部内容：</p>
+<pre><code>tools/espectre/.venv/bin/python tools/espectre/espectre collect \
+  --target 192.168.1.51 \
+  --label p11 \
+  --duration 60 \
+  --pps 100 \
+  --ready-stable-seconds 5 \
+  --detector lightweight \
+  --description "point=P11;block=R1C1;role=train;x=0.83;y=0.77;round=r1"</code></pre>
+
+<table class="mono-table">
+  <tr><th style="width:32%">参数</th><th style="width:22%">我们用的值</th><th>什么意思</th></tr>
+  <tr><td>--target</td><td>192.168.1.51</td><td>板子的 IP 地址。哪块板子采就填哪个</td></tr>
+  <tr><td>--label</td><td>p11</td><td>测点编号，<b>全小写</b>。数据会存进以它命名的文件夹，必须和测点号一模一样</td></tr>
+  <tr><td>--duration</td><td>60</td><td>采集 60 秒。100 pps × 60 秒 ≈ 6000 个数据包，足够算稳定统计量</td></tr>
+  <tr><td>--pps</td><td>100</td><td>路由器每秒发 100 个包。数值太小样本不够，太大容易丢包</td></tr>
+  <tr><td>--ready-stable-seconds</td><td>5</td><td><b>关键参数。</b>检测器要连续 5 秒认为"房间是静止的"才开始保存。这就是为什么人必须退出房间</td></tr>
+  <tr><td>--detector</td><td>lightweight</td><td>用轻量检测器。我们只是在借它的采集能力，用什么都行</td></tr>
+  <tr><td>--description</td><td>point=P11;…</td><td>给这批数据贴的标签，把测点号、坐标、轮次写进去，以后翻数据不会认错</td></tr>
+</table>
+
+<div class="warn">
+<b>三个绝对不能错的地方：</b><br>
+① <code>--label</code> 的内容必须是测点号的小写，写错了数据就归错位置了。<br>
+② 摆好板子后，<b>人要退出房间</b>，把门带上。站在房间里会让信号反射乱跳，数据直接废掉。<br>
+③ 采集期间不要碰板子、不要动路由器、不要开微波炉。
+</div>
+
+<h3>6.3 正式采集前，先试采一个点</h3>
+<p>先拿 P11 试一次，确认整条链路是通的：</p>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图
+bash scripts/02_collect_point.sh P11 192.168.1.51</code></pre>
+<p>脚本会问你确认测点位置，按回车后开始采集。60 秒后你应该看到它把数据归档到 <code>data/points/p11/</code>。</p>
+<p>如果这一步成功了，说明设备、网络、采集程序全部就绪，可以开始批量采集。</p>
+
+<h3>6.4 一次跑完 25 个点</h3>
+<p>把两块板子的 IP 填进去，脚本会按"一批两个点"的节奏提示你摆板子——你只需要摆好、回车、等提示、再摆下一个：</p>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图
+bash scripts/03_collect_round.sh 192.168.1.51 192.168.1.52 r1</code></pre>
+<p>最后一个参数 <code>r1</code> 是这一轮的编号。跑第二轮就写 <code>r2</code>，第三轮写 <code>r3</code>。</p>
+
+<p>输出会长这样，一批一批往前走：</p>
+<pre><code>------------------------------------------------------------
+ 第 1 批
+   板A -> P11  (区块 R1C1, x=0.83 m, y=0.77 m)
+   板B -> P12  (区块 R1C2, x=2.48 m, y=0.77 m)
+
+   请把板子摆到胶带标出的对应格子中心，人退出房间，然后按回车。
+   P11: 新增 1 个文件
+   P12: 新增 1 个文件
+------------------------------------------------------------</code></pre>
+
+<div class="note">
+<b>只有一块板子也能跑：</b>命令里只填一个 IP 就行，脚本自动切成单板模式，时间翻倍（约 40 分钟一轮）。<br>
+<b>中途想停：</b>按 <code>Ctrl + C</code>。已经采好的数据都在硬盘上，不会丢。
+</div>
+
+<h3>6.5 建议采三轮</h3>
+<p>同一个位置在不同时段测出来的信号会略有不同（受环境温度、周围设备、以及人本身的影响）。同一个点采多轮，模型能学到"这里的平均水平是多少、抖动有多大"，比只采一轮准得多。</p>
+<p>建议三轮分散在一天的不同时间，比如上午 10 点、下午 3 点、晚上 8 点。</p>
+
+<!-- ================= 7 ================= -->
+<h2 class="pagebreak">7. 第五步：整理数据</h2>
+
+<p>采完之后，<code>data/points/</code> 下面会散着一堆小文件（一个测点一个文件夹，每次采集产生 1 个 <code>.npz</code>）。这些文件机器能读、人看不懂，需要汇总成表。</p>
+
+<h3>跑这条命令</h3>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图
+tools/espectre/.venv/bin/python scripts/04_build_dataset.py</code></pre>
+
+<h3>它会给你两张表</h3>
+<table>
+  <tr><th style="width:38%">文件</th><th>内容</th></tr>
+  <tr>
+    <td><code>data/points_features.csv</code></td>
+    <td><b>明细表</b>：一行 = 一个原始文件。用来查账、排查坏数据</td>
+  </tr>
+  <tr>
+    <td><code>outputs/测点汇总表.csv</code></td>
+    <td><b>汇总表</b>：一行 = 一个测点。这张是后面建模真正要用的</td>
+  </tr>
+</table>
+
+<h3>汇总表里重要的列</h3>
+<table class="mono-table">
+  <tr><th style="width:26%">列名</th><th>含义</th></tr>
+  <tr><td>point_id</td><td>测点编号，如 P11</td></tr>
+  <tr><td>role</td><td><code>train</code> = 训练点，<code>validate</code> = 验证点</td></tr>
+  <tr><td>x_m / y_m</td><td>这个测点的坐标（米）</td></tr>
+  <tr><td>n_packets</td><td>一共采到多少个包。6000 左右算正常</td></tr>
+  <tr><td><b>rssi_median</b></td><td><b>信号强度中位数（dBm），这是最关键的一列</b></td></tr>
+  <tr><td>rssi_std</td><td>信号抖动程度。这个值越小，说明采集环境越稳定</td></tr>
+  <tr><td>rssi_p10 / rssi_p90</td><td>10% 和 90% 分位数，反映信号的波动范围</td></tr>
+  <tr><td>rssi_source</td><td><code>device_rssi_dbm</code> = 板子直接上报的；<code>csi_power_proxy</code> = 由 CSI 推算的替代值</td></tr>
+</table>
+
+<h3>怎么判断数据好不好</h3>
+<table>
+  <tr><th style="width:32%">现象</th><th>说明什么</th><th style="width:26%">怎么办</th></tr>
+  <tr><td>n_packets 明显低于 6000</td><td>丢包严重，可能是信号太弱或信道拥挤</td><td>重采该点；换信道再试</td></tr>
+  <tr><td>rssi_std 特别大（&gt;4）</td><td>采集期间有干扰，或者有人在房间里走动</td><td>确认无人、关掉干扰源，重采</td></tr>
+  <tr><td>某个点 rssi_median 明显偏离邻居</td><td>板子摆错位置，或者数据里混进了别的测点</td><td>核对 <code>--label</code> 和实际摆放位置</td></tr>
+  <tr><td>脚本提示"尚未采集的测点"</td><td>还有测点没采</td><td>按提示把缺的补上</td></tr>
+</table>
+
+<div class="tip">
+<b>合并多轮数据：</b>如果同一个测点采了 3 轮（产生了 3 个 .npz），脚本会自动把它们合并成一个测点统计。不需要你手工挑文件。
+</div>
+
+<!-- ================= 8 ================= -->
+<h2 class="pagebreak">8. 第六步：生成热力图</h2>
+
+<h3>跑这条命令</h3>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图
+tools/espectre/.venv/bin/python scripts/05_train_and_plot.py</code></pre>
+
+<h3>它会同时跑三个模型，互相比较</h3>
+<table>
+  <tr><th style="width:20%">模型</th><th style="width:34%">原理</th><th>特点</th></tr>
+  <tr>
+    <td><b>IDW</b><br><span class="small">反距离加权</span></td>
+    <td>没测过的位置，就看它周围的测点，谁近信谁（按距离倒数的平方加权）</td>
+    <td>不需要训练，一秒出结果。但只会"和稀泥"，细节差</td>
+  </tr>
+  <tr>
+    <td><b>路径损耗拟合</b><br><span class="small">物理公式</span></td>
+    <td>假设信号只随"离路由器的距离"衰减，拟合一个公式 P = P₀ + n·10log₁₀(d)</td>
+    <td>只用距离，非常简单。信号规律干净时它最强，真实房间里往往偏乐观</td>
+  </tr>
+  <tr>
+    <td><b>GPR</b><br><span class="small">高斯过程回归</span></td>
+    <td>小样本机器学习。不预设衰减规律，让数据自己说话，还能给出不确定度</td>
+    <td><b>本项目的重点方法。</b>20 个点这种小样本下，它是表现最稳的机器学习模型</td>
+  </tr>
+</table>
+
+<h3>输出三个文件</h3>
+<table>
+  <tr><th style="width:40%">文件</th><th>内容</th></tr>
+  <tr><td><code>outputs/热力图_预测.png</code></td><td>最终成品：整个房间的 RSS 分布彩色图</td></tr>
+  <tr><td><code>outputs/热力图_对比.png</code></td><td>三个模型并排对比，一眼看出谁准</td></tr>
+  <tr><td><code>outputs/模型评估报告.md</code></td><td>误差数字表 + 结论</td></tr>
+</table>
+
+<h3>怎么看结果好不好</h3>
+<p>脚本会打印两张误差表。重点是<b>"外部验证"</b>那一张——它表示"用 20 个测点建模，去猜 5 个从没测过的位置"：</p>
+<table>
+  <tr><th style="width:30%">指标</th><th>含义</th><th style="width:26%">参考标准</th></tr>
+  <tr><td><b>MAE</b></td><td>平均绝对误差，单位 dB。越小越好</td><td>&lt; 3 dB 算不错；&lt; 1.5 dB 很好</td></tr>
+  <tr><td>RMSE</td><td>均方根误差，对大误差更敏感</td><td>和 MAE 接近说明没有离谱的异常点</td></tr>
+  <tr><td>R²</td><td>拟合优度，越接近 1 越好</td><td>&gt; 0.8 说明模型抓住了主要规律</td></tr>
+</table>
+
+<h3>成品长这样（示例）</h3>
+<img src="{{IMG_HEATMAP}}" alt="热力图预测示例">
+<p class="figcap">图 2　热力图示例（用模拟数据生成，仅示意效果）。红色 = 信号强，蓝色 = 信号弱；黑点是训练点，红三角是验证点，红星是路由器。可以看出离路由器越远颜色越冷。</p>
+
+<img src="{{IMG_COMPARE}}" alt="三模型对比">
+<p class="figcap">图 3　三种方法并排对比。配色越接近，说明模型越吻合。</p>
+
+<div class="warn">
+<b>上面两张图是用模拟数据生成的示例，不是你的真实测量结果。</b>你跑完真实采集后，同名的正式文件会覆盖生成在 <code>outputs/</code> 下（示例文件带 <code>示例_</code> 前缀，可以对照着看）。
+</div>
+
+<div class="note">
+<b>关于"机器学习到底有没有用"：</b>如果你采的是空房间、只有一台路由器，路径损耗这种物理公式可能就已经很准了——这不代表模型没用，而是说明这个场景太干净。<br>
+想让机器学习真正发挥价值，可以试试：<b>放两三个路由器</b>（多个信号源会让空间特征复杂得多），或者<b>在房间里加一些家具</b>（制造多径反射）。这时 GPR 的优势就会明显体现出来。
+</div>
+
+<!-- ================= 9 ================= -->
+<h2 class="pagebreak">9. 常见问题排查</h2>
+
+<table>
+  <tr><th style="width:32%">现象</th><th>可能原因 & 解决办法</th></tr>
+  <tr>
+    <td><code>espectre devices</code> 一个设备都找不到</td>
+    <td>① 板子没通电 / 没连上 Wi-Fi → 用 <code>espectre monitor</code> 接串口看日志<br>
+        ② Mac 和板子不在同一个网段 → 检查本机 IP（01 脚本会打印）<br>
+        ③ 路由器开了"AP 隔离"或"访客网络隔离" → 到路由器设置里关掉</td>
+  </tr>
+  <tr>
+    <td>Chrome 里点 Connect USB device 没反应 / 列表为空</td>
+    <td>① 数据线只能充电 → 换一根<br>
+        ② 板子没进下载模式 → 按住 BOOT → 按 RESET → 松开 BOOT<br>
+        ③ 用的是 Safari → 换 Chrome</td>
+  </tr>
+  <tr>
+    <td>采集时报 <code>too few packets</code> / 包数很少</td>
+    <td>① 板子离路由器太远，信号弱 → 正常现象，检查该点距离<br>
+        ② 信道被邻居占用 → 换 1/6/11 里的另一个信道<br>
+        ③ 路由器在省电模式 → 关闭 Wi-Fi 节能选项</td>
+  </tr>
+  <tr>
+    <td>采集一直卡在 "waiting for stable"</td>
+    <td>房间里有东西在动（风扇、宠物、窗帘飘动），或者有人还在房间里。<br>把 <code>--ready-stable-seconds</code> 改成 <code>0</code> 可以关掉这个等待（但数据质量会下降）。</td>
+  </tr>
+  <tr>
+    <td>找不到采集出来的数据文件</td>
+    <td>原始文件在 <code>tools/espectre/data/&lt;label&gt;/</code>，脚本会把它复制到 <code>data/points/&lt;label&gt;/</code>。两边都看看。</td>
+  </tr>
+  <tr>
+    <td>跑 Python 脚本报 <code>ModuleNotFoundError: numpy</code></td>
+    <td>用了系统的 python3。必须写 <code>tools/espectre/.venv/bin/python</code></td>
+  </tr>
+  <tr>
+    <td>生成的热力图有明显的色块边界</td>
+    <td>测点太少或分布不均。补采缺失的测点，或多采几轮。</td>
+  </tr>
+</table>
+
+<!-- ================= 附录 A ================= -->
+<h2 class="pagebreak">附录 A：25 个测点坐标表</h2>
+
+<p>坐标原点 = 路由器所在的墙角。<code>x</code> 沿房间宽（6.62 m），<code>y</code> 沿房间长（7.74 m）。</p>
+
+<h3>训练点（20 个，摆在格子正中心）</h3>
+<table class="mono-table">
+  <tr><th>测点</th><th>区块</th><th>x (m)</th><th>y (m)</th><th>测点</th><th>区块</th><th>x (m)</th><th>y (m)</th></tr>
+  <tr><td>P11</td><td>R1C1</td><td>0.83</td><td>0.77</td><td>P31</td><td>R3C1</td><td>0.83</td><td>3.87</td></tr>
+  <tr><td>P12</td><td>R1C2</td><td>2.48</td><td>0.77</td><td>P32</td><td>R3C2</td><td>2.48</td><td>3.87</td></tr>
+  <tr><td>P13</td><td>R1C3</td><td>4.14</td><td>0.77</td><td>P33</td><td>R3C3</td><td>4.14</td><td>3.87</td></tr>
+  <tr><td>P14</td><td>R1C4</td><td>5.79</td><td>0.77</td><td>P34</td><td>R3C4</td><td>5.79</td><td>3.87</td></tr>
+  <tr><td>P21</td><td>R2C1</td><td>0.83</td><td>2.32</td><td>P41</td><td>R4C1</td><td>0.83</td><td>5.42</td></tr>
+  <tr><td>P22</td><td>R2C2</td><td>2.48</td><td>2.32</td><td>P42</td><td>R4C2</td><td>2.48</td><td>5.42</td></tr>
+  <tr><td>P23</td><td>R2C3</td><td>4.14</td><td>2.32</td><td>P43</td><td>R4C3</td><td>4.14</td><td>5.42</td></tr>
+  <tr><td>P24</td><td>R2C4</td><td>5.79</td><td>2.32</td><td>P44</td><td>R4C4</td><td>5.79</td><td>5.42</td></tr>
+  <tr><td>P51</td><td>R5C1</td><td>0.83</td><td>6.97</td><td>P53</td><td>R5C3</td><td>4.14</td><td>6.97</td></tr>
+  <tr><td>P52</td><td>R5C2</td><td>2.48</td><td>6.97</td><td>P54</td><td>R5C4</td><td>5.79</td><td>6.97</td></tr>
+</table>
+
+<h3>验证点（5 个，藏在格子交界处）</h3>
+<table class="mono-table">
+  <tr><th>测点</th><th>位置描述</th><th>x (m)</th><th>y (m)</th></tr>
+  <tr><td>V01</td><td>左下区域，第 1 条竖线与第 1 条横线交叉点</td><td>1.66</td><td>1.55</td></tr>
+  <tr><td>V02</td><td>右下区域，第 3 条竖线与第 1 条横线交叉点</td><td>4.97</td><td>1.55</td></tr>
+  <tr><td>V03</td><td>房间正中央</td><td>3.31</td><td>3.10</td></tr>
+  <tr><td>V04</td><td>左上区域，第 1 条竖线与第 3 条横线交叉点</td><td>1.66</td><td>4.64</td></tr>
+  <tr><td>V05</td><td>右上区域，第 3 条竖线与第 3 条横线交叉点</td><td>4.97</td><td>4.64</td></tr>
+</table>
+
+<p class="small">完整数据（含文件名标签）在 <code>scripts/sites.csv</code>。如果房间尺寸或分区变了，改这个文件即可，其他脚本会自动跟着走。</p>
+
+<!-- ================= 附录 B ================= -->
+<h2 class="pagebreak">附录 B：命令速查</h2>
+
+<p>所有命令都在项目根目录下运行：</p>
+<pre><code>cd ~/Desktop/deepworks项目/Wi-Fi热力图</code></pre>
+
+<h3>环境检查</h3>
+<pre><code>bash scripts/01_check_env.sh</code></pre>
+
+<h3>画点位图（打印用）</h3>
+<pre><code>tools/espectre/.venv/bin/python scripts/00_draw_site_map.py</code></pre>
+
+<h3>查找房间里的板子，拿到 IP</h3>
+<pre><code>tools/espectre/.venv/bin/python tools/espectre/espectre devices</code></pre>
+
+<h3>采单个测点</h3>
+<pre><code>bash scripts/02_collect_point.sh P11 192.168.1.51</code></pre>
+
+<h3>一轮跑完 25 个测点（双板并行）</h3>
+<pre><code>bash scripts/03_collect_round.sh 192.168.1.51 192.168.1.52 r1</code></pre>
+
+<h3>整理数据 → 两张表</h3>
+<pre><code>tools/espectre/.venv/bin/python scripts/04_build_dataset.py</code></pre>
+
+<h3>训练模型 → 热力图</h3>
+<pre><code>tools/espectre/.venv/bin/python scripts/05_train_and_plot.py</code></pre>
+
+<h3>实时看板子状态（可选）</h3>
+<pre><code>open -a "Google Chrome" https://espectre.dev/tools/monitor/</code></pre>
+
+<h3>自定义采集时长</h3>
+<pre><code># 采 90 秒而不是默认的 60 秒
+DURATION=90 bash scripts/03_collect_round.sh 192.168.1.51 192.168.1.52 r2</code></pre>
+
+<h3>文件都在哪</h3>
+<table class="mono-table">
+  <tr><th style="width:44%">路径</th><th>内容</th></tr>
+  <tr><td>data/points/&lt;测点&gt;/</td><td>原始采集文件（.npz）</td></tr>
+  <tr><td>data/points_features.csv</td><td>文件级明细表</td></tr>
+  <tr><td>outputs/测点汇总表.csv</td><td>测点级汇总表（建模用）</td></tr>
+  <tr><td>outputs/采集点位图.png</td><td>分区与测点位置图</td></tr>
+  <tr><td>outputs/热力图_预测.png</td><td>最终热力图</td></tr>
+  <tr><td>outputs/热力图_对比.png</td><td>三模型对比图</td></tr>
+  <tr><td>outputs/模型评估报告.md</td><td>误差数字与结论</td></tr>
+  <tr><td>scripts/sites.csv</td><td>测点坐标总表（改这里可调整布局）</td></tr>
+</table>
+
+<p class="small" style="margin-top:30px;border-top:1px solid #e0e0e0;padding-top:10px">
+制作：DeepWorks　|　工具：ESPectre CLI　|　2026-10-15
+</p>
+
+</body>
+</html>
