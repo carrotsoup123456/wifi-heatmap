@@ -28,6 +28,8 @@ const C = {
 };
 
 let lastState = null;
+let pickMode = false;   // 自定义采集点：选点模式开关
+let picked = [];        // 选中的点 id，按点击顺序（即采集顺序）
 
 /* ---------- API ---------- */
 async function api(path, opts) {
@@ -316,6 +318,12 @@ function render(s) {
     !(s.phase === "ready" || s.phase === "collected" || s.phase === "done") || s.batch_index >= s.total_batches;
   document.getElementById("btn-stop").disabled = (s.phase !== "collecting");
   document.getElementById("btn-start").disabled = (s.phase === "collecting" || s.phase === "building" || s.phase === "plotting");
+  // 自定义采集点按钮：采集/整理/出图中、或一轮采到一半时禁用
+  const midRound = (s.phase === "ready" && s.batch_index > 0);
+  document.getElementById("btn-pick").disabled =
+    s.phase === "collecting" || s.phase === "building" || s.phase === "plotting" || midRound;
+  if (pickMode && (s.phase === "collecting" || s.phase === "building" || s.phase === "plotting" || midRound)) pickCancel();
+  syncPickUI();
 
   // 跳过按钮：仅演示模式；采集中 = 跳过剩余批次，空闲 = 直接秒采+出图
   const btnSkip = document.getElementById("btn-skip");
@@ -360,6 +368,114 @@ function render(s) {
 
 function escapeHtml(t) {
   return t.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+/* ---------- 自定义采集点 ---------- */
+function mapXY(cv, room) {
+  const W = cv.width, H = cv.height, pad = 60;
+  const kx = (W - 2 * pad) / room.w;
+  const ky = (H - 2 * pad) / room.h;
+  return { X: x => pad + x * kx, Y: y => H - pad - y * ky };
+}
+
+function togglePickMode() {
+  if (!lastState) return;
+  if (!pickMode) {
+    // 进入选点模式：带出当前方案（如有）供修改
+    picked = (lastState.custom_points || []).slice();
+    pickMode = true;
+  } else {
+    pickCancel();
+    return;
+  }
+  syncPickUI();
+  drawMap(lastState);
+}
+
+function pickAll() {
+  if (!lastState) return;
+  picked = lastState.sites.filter(st => st.role === "train").map(st => st.point_id);
+  syncPickUI();
+  drawMap(lastState);
+}
+
+function pickClear() {
+  picked = [];
+  syncPickUI();
+  drawMap(lastState);
+}
+
+function pickCancel() {
+  pickMode = false;
+  picked = [];
+  syncPickUI();
+  if (lastState) drawMap(lastState);
+}
+
+async function pickConfirm() {
+  if (picked.length < 1) { alert("还没选点：在右边地图上点几个圆圈"); return; }
+  const r = await post("/api/points/custom", { points: picked });
+  if (!r.ok) { alert(r.msg || "设置失败"); return; }
+  pickMode = false;
+  picked = [];
+  await refresh(true);
+}
+
+async function resetPickDefault() {
+  const r = await post("/api/points/default");
+  if (!r.ok) { alert(r.msg || "操作失败"); return; }
+  await refresh(true);
+}
+
+function syncPickUI() {
+  const bar = document.getElementById("pick-bar");
+  const btn = document.getElementById("btn-pick");
+  const cnt = document.getElementById("pick-count");
+  const ps = document.getElementById("pick-status");
+  const cv = document.getElementById("map-canvas");
+  if (!bar || !btn) return;
+  bar.hidden = !pickMode;
+  cnt.textContent = `已选 ${picked.length} 点`;
+  btn.classList.toggle("active", pickMode);
+  btn.textContent = pickMode ? "🎯 选点中…（再点我取消）" : "🎯 自定义采集点";
+  if (cv) cv.style.cursor = pickMode ? "pointer" : "";
+  if (pickMode) {
+    ps.textContent = "";
+  } else if (lastState && lastState.custom_points) {
+    ps.innerHTML = "";
+    const t = document.createElement("span");
+    t.textContent = `当前：自定义 ${lastState.custom_points.length} 点 `;
+    const a = document.createElement("a");
+    a.href = "javascript:void 0";
+    a.textContent = "恢复默认";
+    a.onclick = resetPickDefault;
+    ps.appendChild(t);
+    ps.appendChild(a);
+  } else {
+    ps.textContent = "";
+  }
+}
+
+function onMapClick(ev) {
+  if (!pickMode || !lastState) return;
+  const cv = document.getElementById("map-canvas");
+  const rect = cv.getBoundingClientRect();
+  // canvas 可能被 CSS 缩放：换算回画布坐标
+  const px = (ev.clientX - rect.left) * (cv.width / rect.width);
+  const py = (ev.clientY - rect.top) * (cv.height / rect.height);
+  const { X, Y } = mapXY(cv, lastState.room);
+  let best = null, bestD = 20;   // 20px 命中半径
+  for (const site of lastState.sites) {
+    const d = Math.hypot(X(site.x) - px, Y(site.y) - py);
+    if (d < bestD) { bestD = d; best = site; }
+  }
+  if (!best) return;
+  const pid = best.point_id;
+  const i = picked.indexOf(pid);
+  if (i >= 0) picked.splice(i, 1);   // 再点一次 = 取消选择
+  else picked.push(pid);
+  syncPickUI();
+  drawMap(lastState);
 }
 
 /* ---------- 点位图 ---------- */
@@ -452,6 +568,30 @@ function drawMap(s) {
     ctx.font = "11px Menlo, monospace";
     ctx.textAlign = "center";
     ctx.fillText(site.point_id, cx, cy - 15);
+  }
+
+  // 选点模式：高亮已选点 + 顺序角标
+  if (pickMode) {
+    picked.forEach((pid, i) => {
+      const site = s.sites.find(st => st.point_id === pid);
+      if (!site) return;
+      const cx = X(site.x), cy = Y(site.y);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.strokeStyle = C.now;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 13, cy - 13, 9, 0, Math.PI * 2);
+      ctx.fillStyle = C.now;
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 11px Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), cx + 13, cy - 13);
+      ctx.textBaseline = "alphabetic";
+    });
   }
 
   // AP（左下角）
@@ -723,4 +863,10 @@ loadLayout();
   close.addEventListener("click", shut);
   modal.addEventListener("click", (e) => { if (e.target === modal) shut(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !modal.hidden) shut(); });
+})();
+
+// 自定义采集点：平面图点击选点
+(function () {
+  const cv = document.getElementById("map-canvas");
+  if (cv) cv.addEventListener("click", onMapClick);
 })();

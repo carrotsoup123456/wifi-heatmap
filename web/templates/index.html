@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wi-Fi 热力图 · 一键采集平台</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261016m">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261016o">
 </head>
 <body>
 
@@ -152,6 +152,19 @@ source ~/esp/esp-idf/export.sh
         <button id="btn-next" class="btn btn-accent" onclick="nextBatch()" disabled>⏵ 采集本批</button>
       </div>
       <div class="btn-row">
+        <button id="btn-pick" class="btn btn-ghost" onclick="togglePickMode()"
+                title="在右侧平面图上点选要采集的测点，按点选顺序采集；不用它就是默认全部测点">🎯 自定义采集点</button>
+        <span class="muted" id="pick-status"></span>
+      </div>
+      <div id="pick-bar" class="pick-bar" hidden>
+        <span id="pick-count" class="pick-count">已选 0 点</span>
+        <button class="btn btn-ghost btn-sm" onclick="pickAll()">全选</button>
+        <button class="btn btn-ghost btn-sm" onclick="pickClear()">清空</button>
+        <button class="btn btn-primary btn-sm" onclick="pickConfirm()">✅ 就用这些点</button>
+        <button class="btn btn-ghost btn-sm" onclick="pickCancel()">取消</button>
+        <p class="muted pick-tip">在右边地图上点圆圈选点，再点一次取消；数字是采集顺序。</p>
+      </div>
+      <div class="btn-row">
         <button id="btn-skip" class="btn btn-ghost" onclick="skipCollect()" hidden>⏭ 跳过采集，直接出图</button>
       </div>
       <div class="btn-row">
@@ -292,7 +305,7 @@ source ~/esp/esp-idf/export.sh
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}?v=20261016m"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261016o"></script>
 <script type="module" src="{{ url_for('static', filename='flash.js') }}?v=20261016n"></script>
 </body>
 </html>

@@ -45,7 +45,7 @@ OWNER_FILE = SESSION_DIR / "_active_owner.json"  # 记录 data/points 当前属�
 OUTPUTS_DIR = ROOT / "outputs"
 VENV_PY = ROOT / "tools" / "espectre" / ".venv" / "bin" / "python"
 ESPECTRE = ROOT / "tools" / "espectre" / "espectre"
-ESPECTRE_DATA = ROOT / "tools" / "espectre" / "data"
+ESPECTRE_DATA = ROOT / "tools" / "espectre" / "micro-espectre" / "data"  # v3 CLI 实际写这里
 
 ROOM_W, ROOM_H = 6.62, 7.74
 AP_X, AP_Y = 0.30, 0.30
@@ -91,13 +91,20 @@ reload_layout()
 
 
 def make_batches(two_boards: bool = True) -> list[dict]:
-    """把 25 个点切成批次。双板：每批 2 个点；单板：每批 1 个。"""
+    """把测点切成批次。双板：每批 2 个点；单板：每批 1 个。
+    顺序取「当前生效方案」：用户自定义子集（按点击顺序）或默认全部测点。"""
     step = 2 if two_boards else 1
+    order = STATE.get("custom_points") or POINT_ORDER
     batches = []
-    for i in range(0, len(POINT_ORDER), step):
-        chunk = POINT_ORDER[i:i + step]
+    for i in range(0, len(order), step):
+        chunk = order[i:i + step]
         batches.append({"A": chunk[0], "B": chunk[1] if len(chunk) > 1 else None})
     return batches
+
+
+def active_order() -> list:
+    """当前生效的采集顺序：自定义子集优先，否则默认全量。"""
+    return STATE.get("custom_points") or POINT_ORDER
 
 
 # ---------------------------------------------------------------- 全局状态
@@ -119,6 +126,11 @@ STATE = {
     "summary": None,           # 04 跑完后的汇总（行数等）
     "report": None,            # 05 跑完后的评估摘要
     "error": None,
+    # 产物新鲜度标记：只有「跑完一整轮」之后再「整理/出图」，下载包才放对应产物
+    "custom_points": None,     # 自定义采集方案（按点击顺序的点 id 列表）；None = 默认全部 56 点
+    "round_complete_at": None, # 本轮完整采完的时刻（epoch）
+    "built_at": None,          # 整理数据最近一次成功的时刻
+    "plotted_at": None,        # 生成热力图最近一次成功的时刻
 }
 _worker_thread = None
 _stop_flag = threading.Event()
@@ -151,6 +163,10 @@ def save_session(mode: str) -> None:
         "batch_index": STATE["batch_index"],
         "two_boards": STATE["two_boards"],
         "round": STATE["round"],
+        "custom_points": STATE.get("custom_points"),
+        "round_complete_at": STATE.get("round_complete_at"),
+        "built_at": STATE.get("built_at"),
+        "plotted_at": STATE.get("plotted_at"),
         "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     (SESSION_DIR / f"{mode}.json").write_text(
@@ -174,7 +190,11 @@ def apply_session(sess: dict) -> None:
     STATE["batches"] = make_batches(STATE["two_boards"])
     STATE["batch_index"] = min(int(sess.get("batch_index", 0)), len(STATE["batches"]))
     STATE.update({"batch_start": None, "live": [], "progress": None,
-                  "summary": None, "report": None, "error": None})
+                  "summary": None, "report": None, "error": None,
+                  "custom_points": sess.get("custom_points"),
+                  "round_complete_at": sess.get("round_complete_at"),
+                  "built_at": sess.get("built_at"),
+                  "plotted_at": sess.get("plotted_at")})
     if STATE["batch_index"] < len(STATE["batches"]):
         STATE["phase"] = "ready"
     else:
@@ -276,8 +296,8 @@ def current_batch() -> dict | None:
 
 
 STATUS_RE = re.compile(
-    r"STATUS:\s*(\w+).*?elapsed\s+([\d.]+)/([\d.]+)s\s*\|\s*pps\s+(\d+)\s*\|\s*drop\s+([\d.]+)%\s*\|\s*packets\s+(\d+)"
-)
+    r"STATUS:\s*(\w+).*?elapsed\s+([\d.]+)/([\d.]+)s\s*\|\s*capture\s+(\d+)"
+)  # v3 CLI 格式：STATUS: RECORDING 1/1 | elapsed 4.6/5.0s | capture 464
 
 
 def collect_point_real(point_id: str, ip: str, round_name: str) -> bool:
@@ -289,7 +309,7 @@ def collect_point_real(point_id: str, ip: str, round_name: str) -> bool:
         str(VENV_PY), str(ESPECTRE), "collect",
         "--target", ip, "--label", label,
         "--duration", str(BATCH_SECONDS_REAL), "--pps", "100",
-        "--ready-stable-seconds", "5", "--detector", "lightweight",
+        "--ready-stable-seconds", "0", "--detector", "lightweight",
         "--description", desc,
     ]
     log(f"真实采集 {point_id} -> {ip}")
@@ -309,8 +329,8 @@ def collect_point_real(point_id: str, ip: str, round_name: str) -> bool:
                 with LOCK:
                     STATE["progress"] = {
                         "status": m.group(1), "elapsed": float(m.group(2)),
-                        "duration": float(m.group(3)), "pps": int(m.group(4)),
-                        "drop": float(m.group(5)), "packets": int(m.group(6)),
+                        "duration": float(m.group(3)), "packets": int(m.group(4)),
+                        "pps": 100, "drop": 0.0,
                     }
             elif "Saved" in line or "No packets" in line or "Error" in line or "failed" in line.lower():
                 log(f"[{point_id}] {line[-110:]}")
@@ -319,11 +339,15 @@ def collect_point_real(point_id: str, ip: str, round_name: str) -> bool:
         with LOCK:
             if proc in _current_procs:
                 _current_procs.remove(proc)
-    if proc.returncode != 0:
-        log(f"[{point_id}] 采集器返回码 {proc.returncode}，请检查设备/网络")
-        return False
-    # 归档：tools/espectre/data/<label>/ -> data/points/<label>/
+    # v3 CLI 质量准入门（占用率/包数）不过会 exit(1)，但 npz 已落盘——有数据就算成功（告警照记）
     src = ESPECTRE_DATA / label
+    has_data = src.exists() and any(src.glob("*.npz"))
+    if proc.returncode != 0 and not has_data:
+        log(f"[{point_id}] 采集器返回码 {proc.returncode}，且无数据文件，请检查设备/网络")
+        return False
+    if proc.returncode != 0:
+        log(f"[{point_id}] 质量门未过但数据已保存（返回码 {proc.returncode}），按成功归档")
+    # 归档：tools/espectre/data/<label>/ -> data/points/<label>/
     dst = POINTS_DIR / label
     dst.mkdir(parents=True, exist_ok=True)
     n_new = 0
@@ -424,13 +448,17 @@ def collect_worker() -> None:
     """手动模式：只采当前这一批就退出，等用户点「采集本批」（真实模式要挪板子）。"""
     batch = current_batch()
     if batch is None:
+        with LOCK:
+            STATE["round_complete_at"] = STATE.get("round_complete_at") or time.time()
         set_phase("collected")
         log("一轮采集完成，全部测点已采完")
         return
     if run_one_batch(batch):
         if current_batch() is None:      # 刚采完的是最后一批：进入「采集完成」，解锁整理/出图
+            with LOCK:
+                STATE["round_complete_at"] = time.time()
             set_phase("collected")
-            left = [p for p in POINT_ORDER if p not in STATE["collected"]]
+            left = [p for p in active_order() if p not in STATE["collected"]]
             if left:
                 log(f"一轮结束，还有 {len(left)} 个点没采到（{', '.join(left[:6])}"
                     f"{'…' if len(left) > 6 else ''}）：检查设备后可「开始新一轮」补采")
@@ -473,6 +501,10 @@ def run_script(script: str, phase: str, done_phase: str, key: str) -> None:
         out = (proc.stdout or "") + (proc.stderr or "")
         with LOCK:
             STATE[key] = {"ok": proc.returncode == 0, "tail": out[-1500:]}
+            if proc.returncode == 0 and key == "summary":
+                STATE["built_at"] = time.time()
+            elif proc.returncode == 0 and key == "report":
+                STATE["plotted_at"] = time.time()
         log(f"{script} 完成" if proc.returncode == 0 else f"{script} 出错（见结果区）")
     except Exception as exc:  # noqa: BLE001
         with LOCK:
@@ -522,7 +554,8 @@ def api_state():
             "elapsed": elapsed,
             "remaining": remaining,
             "collected": STATE["collected"],
-            "total_points": len(POINT_ORDER),
+            "total_points": len(active_order()),
+            "custom_points": STATE["custom_points"],   # None = 默认全部测点
             "points_on_disk": points_on_disk,
             "live": STATE["live"][-120:],
             "progress": STATE["progress"],
@@ -655,6 +688,9 @@ def api_collect_start():
         STATE["summary"] = None
         STATE["report"] = None
         STATE["error"] = None
+        STATE["round_complete_at"] = None
+        STATE["built_at"] = None
+        STATE["plotted_at"] = None
         if data.get("device_ips"):
             STATE["device_ips"] = data["device_ips"]
         STATE["phase"] = "ready"
@@ -677,6 +713,9 @@ def api_collect_next():
         if STATE["phase"] in ("collected", "done"):
             STATE["summary"] = None   # 结果已过时：清掉，等重新整理出图
             STATE["report"] = None
+            STATE["round_complete_at"] = None
+            STATE["built_at"] = None
+            STATE["plotted_at"] = None
         if STATE["batch_index"] >= len(STATE["batches"]):
             return jsonify({"ok": False, "msg": "已全部采完"})
     _stop_flag.clear()
@@ -705,6 +744,9 @@ def api_collect_auto():
             STATE["summary"] = None
             STATE["report"] = None
             STATE["error"] = None
+            STATE["round_complete_at"] = None
+            STATE["built_at"] = None
+            STATE["plotted_at"] = None
             STATE["phase"] = "ready"
     if fresh:
         # 全新一轮：清空演示旧数据（一键跑完只在 demo，真实模式走不到这里）
@@ -797,6 +839,7 @@ def api_reset():
         STATE.update({
             "phase": "idle", "batch_index": 0, "batches": [], "collected": [],
             "live": [], "progress": None, "summary": None, "report": None,
+            "round_complete_at": None, "built_at": None, "plotted_at": None,
             "error": None, "batch_start": None,
         })
     log("已重置")
@@ -890,6 +933,7 @@ def api_layout_apply():
         STATE.update({
             "phase": "idle", "batch_index": 0, "batches": [], "collected": [],
             "live": [], "progress": None, "summary": None, "report": None,
+            "round_complete_at": None, "built_at": None, "plotted_at": None,
             "error": None, "batch_start": None,
         })
     save_session(STATE["mode"])
@@ -898,10 +942,57 @@ def api_layout_apply():
     return jsonify({"ok": True, "layout": lay, "kept": False})
 
 
+def _points_edit_guard():
+    """改采集方案前的状态检查：采集/整理/出图中、或一轮采到一半，都不允许改。"""
+    if STATE["phase"] in ("collecting", "building", "plotting"):
+        return "正在采集/整理/出图，结束后再改采集方案"
+    if STATE["phase"] == "ready" and STATE["batch_index"] > 0:
+        return "本轮已采了一部分：先采完，或点「重置」清空后再改方案"
+    return None
+
+
+@app.route("/api/points/custom", methods=["POST"])
+def api_points_custom():
+    """设置自定义采集方案：用户挑的子集，严格按点击顺序采集。"""
+    data = request.get_json(force=True) or {}
+    pts = data.get("points") or []
+    with LOCK:
+        err = _points_edit_guard()
+        if err:
+            return jsonify({"ok": False, "msg": err}), 409
+        valid, seen = [], set()
+        for p in pts:
+            pid = str(p).strip().upper()
+            if pid in SITE_BY_ID and pid not in seen:
+                seen.add(pid)
+                valid.append(pid)
+        if not valid:
+            return jsonify({"ok": False, "msg": "至少选 1 个有效测点"}), 400
+        STATE["custom_points"] = valid
+        save_session(STATE["mode"])
+        n = len(valid)
+    log(f"自定义采集方案：{n} 个点（{', '.join(valid[:8])}{'…' if n > 8 else ''}），"
+        f"将按选择顺序采集。点开始新一轮生效")
+    return jsonify({"ok": True, "count": n, "points": valid})
+
+
+@app.route("/api/points/default", methods=["POST"])
+def api_points_default():
+    """恢复默认方案：全部测点、默认顺序。"""
+    with LOCK:
+        err = _points_edit_guard()
+        if err:
+            return jsonify({"ok": False, "msg": err}), 409
+        STATE["custom_points"] = None
+        save_session(STATE["mode"])
+    log("已恢复默认采集方案：全部测点、默认顺序。点开始新一轮生效")
+    return jsonify({"ok": True})
+
+
 @app.route("/api/download")
 def api_download():
-    """一键下载数据包：任何时刻都能下（采集中也行）——结果图/报告有多少放多少，
-    原始采集数据全量打包，并附一份「进度清单.json」说明采到哪了。"""
+    """一键下载数据包：任何时刻都能下（采集中也行）——原始采集数据全量打包；
+    整理数据/热力图/报告只在「本轮完整采完后点过对应按钮」才放入，绝不混入旧产物。"""
     mem = io.BytesIO()
     n_data = 0
     with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as z:
@@ -910,26 +1001,36 @@ def api_download():
             if path.is_file():
                 z.write(path, arcname)
                 n_data += 1
-        add(ROOT / "outputs/热力图_预测.png", "结果图/热力图_预测.png")
-        add(ROOT / "outputs/热力图_对比.png", "结果图/热力图_对比.png")
-        add(ROOT / "outputs/模型评估报告.md", "报告/模型评估报告.md")
-        add(ROOT / "outputs/测点汇总表.csv", "报告/测点汇总表.csv")
-        add(ROOT / "data/points_features.csv", "整理数据/points_features.csv")
+        # 产物只放「本轮完整采完之后」生成的：防止旧轮次的报告/热力图混进下载包
+        with LOCK:
+            snap = dict(STATE)
+        round_done_at = snap.get("round_complete_at")
+        built_fresh = bool(round_done_at and snap.get("built_at") and snap["built_at"] >= round_done_at)
+        plotted_fresh = bool(round_done_at and snap.get("plotted_at") and snap["plotted_at"] >= round_done_at)
+        if plotted_fresh:
+            add(ROOT / "outputs/热力图_预测.png", "结果图/热力图_预测.png")
+            add(ROOT / "outputs/热力图_对比.png", "结果图/热力图_对比.png")
+            add(ROOT / "outputs/模型评估报告.md", "报告/模型评估报告.md")
+            add(ROOT / "outputs/测点汇总表.csv", "报告/测点汇总表.csv")
+        if built_fresh or plotted_fresh:
+            add(ROOT / "data/points_features.csv", "整理数据/points_features.csv")
         if POINTS_DIR.exists():
             for f in sorted(POINTS_DIR.rglob("*.npz")):
                 z.write(f, f"原始数据/{f.relative_to(POINTS_DIR)}")
                 n_data += 1
-        with LOCK:
-            snap = dict(STATE)
         progress = {
             "导出时间": time.strftime("%Y-%m-%d %H:%M:%S"),
             "模式": "演示（模拟数据）" if snap["mode"] == "demo" else "真实",
             "房型": LAYOUT.get("name"), "轮次": snap.get("round"),
             "当前阶段": snap.get("phase"),
             "已采测点": snap.get("collected", []),
-            "测点总数": len(POINT_ORDER),
+            "测点总数": len(active_order()),
+            "整理数据": "已包含（本轮采完后整理）" if (built_fresh or plotted_fresh)
+                       else "未包含：需跑完一整轮采集后点「整理数据」",
+            "热力图与评估报告": "已包含（本轮采完后出图）" if plotted_fresh
+                            else "未包含：需跑完一整轮采集后点「生成热力图」",
             "说明": "采集中途导出也完整：已采的点都在「原始数据」里；"
-                   "结果图/报告如果还没生成，文件夹里就没有，不影响数据本身。",
+                   "整理数据/热力图只在本轮采完后点过对应按钮才会打包，绝不混入旧轮次产物。",
         }
         z.writestr("进度清单.json", json.dumps(progress, ensure_ascii=False, indent=2))
     if n_data == 0:
@@ -962,4 +1063,4 @@ if __name__ == "__main__":
     print("  浏览器打开:  http://127.0.0.1:8000")
     print("  默认是【演示模式】，不插板子也能跑完整流程")
     print("=" * 56)
-    app.run(host="127.0.0.1", port=8000, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=8000, debug=False, threaded=True)

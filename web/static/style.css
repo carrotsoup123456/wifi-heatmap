@@ -403,6 +403,25 @@ pre.cmd {
 ::-webkit-scrollbar-thumb { background: rgba(120,120,128,.3); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* ===== 自定义采集点 ===== */
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn.active {
+  border-color: var(--accent, #0a84ff);
+  color: var(--accent, #0a84ff);
+  background: rgba(10, 132, 255, .08);
+}
+.pick-bar {
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(10, 132, 255, .5);
+  border-radius: 12px;
+  background: rgba(10, 132, 255, .06);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.pick-count { font-size: 13px; font-weight: 700; color: var(--accent, #0a84ff); margin-right: 4px; }
+.pick-tip { width: 100%; margin: 2px 0 0; font-size: 12px; }
+#pick-status a { color: var(--accent, #0a84ff); text-decoration: underline; cursor: pointer; }
+
 /* ===== 响应式 ===== */
 @media (max-width: 1200px) {
   .layout { grid-template-columns: 1fr; }
