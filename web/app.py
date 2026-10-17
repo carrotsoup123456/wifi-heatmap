@@ -677,6 +677,24 @@ def api_devices():
     return jsonify({"ok": True, "devices": devices})
 
 
+def archive_points(reason: str) -> int:
+    """新一轮开始前，把 data/points 下残留的原始文件整体移到
+    data/_archive/<模式>_<时间戳>/，防止旧轮次数据混进本轮特征表。返回归档文件数。"""
+    if not POINTS_DIR.exists():
+        return 0
+    files = sorted(f for f in POINTS_DIR.rglob("*.npz"))
+    if not files:
+        return 0
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    dst_root = POINTS_DIR.parent / "_archive" / f"{STATE['mode']}_{stamp}"
+    for f in files:
+        dst = dst_root / f.relative_to(POINTS_DIR)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(f), dst)
+    log(f"归档：{len(files)} 个旧原始文件 -> {dst_root.relative_to(ROOT)}（{reason}）")
+    return len(files)
+
+
 @app.route("/api/collect/start", methods=["POST"])
 def api_collect_start():
     data = request.get_json(force=True) or {}
@@ -694,11 +712,8 @@ def api_collect_start():
         if data.get("device_ips"):
             STATE["device_ips"] = data["device_ips"]
         STATE["phase"] = "ready"
-    # 演示模式：清空旧数据目录，保证本轮产物干净（真实模式绝不清）
-    if STATE["mode"] == "demo" and POINTS_DIR.exists():
-        for child in POINTS_DIR.iterdir():
-            if child.is_dir():
-                shutil.rmtree(child)
+    # 任何模式：旧文件一律归档到 data/_archive/（绝不硬删，可回溯）
+    archive_points("开始新一轮")
     log(f"开始新一轮 {STATE['round']}，共 {len(STATE['batches'])} 批")
     return jsonify({"ok": True, "total_batches": len(STATE["batches"])})
 
@@ -874,8 +889,7 @@ def _reset_all_modes() -> None:
     if POINTS_DIR.exists():
         shutil.rmtree(POINTS_DIR)
     POINTS_DIR.mkdir(parents=True, exist_ok=True)
-    if OWNER_FILE.exists():
-        OWNER_FILE.unlink()
+    write_owner(STATE["mode"])  # 重置后仍如实记录归属，避免重启时误判模式
 
 
 @app.route("/api/layout")
