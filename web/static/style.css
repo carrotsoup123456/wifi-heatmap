@@ -103,8 +103,17 @@ body::before {
   gap: 20px;
   padding: 22px 30px;
   align-items: start;
+  max-width: 1760px;
+  margin: 0 auto;          /* 超宽屏两边留白，而不是把中栏拉成空旷白条 */
 }
 .col { display: flex; flex-direction: column; gap: 20px; }
+/* 中栏（点位图）+ 右栏（实时/日志）吸附跟随滚动：
+   左栏很长，往下滚动采集时地图和曲线始终在眼前，右侧不再出现大片空白 */
+.col-center, .col-right {
+  position: sticky;
+  top: 96px;               /* 顶栏高约 77px，留一点呼吸位 */
+  align-self: start;
+}
 
 /* ===== 卡片（白底磨砂 + 圆角 + 柔影） ===== */
 .card {
@@ -379,7 +388,7 @@ pre.cmd {
 }
 
 /* ===== 结果区 ===== */
-.results { padding: 0 30px 26px; }
+.results { padding: 0 30px 26px; max-width: 1760px; margin: 0 auto; }
 .result-grid { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 20px; }
 .result-block h3 { font-size: 13px; color: var(--muted); margin-bottom: 10px; letter-spacing: 2px; font-weight: 700; }
 .summary-box {
@@ -418,6 +427,7 @@ pre.cmd {
   background: rgba(10, 132, 255, .06);
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 }
+.pick-bar .btn { flex: 0 0 auto; }   /* 窄栏里按钮按内容宽度排列，不再被压成竖排字 */
 .pick-count { font-size: 13px; font-weight: 700; color: var(--accent, #0a84ff); margin-right: 4px; }
 .pick-tip { width: 100%; margin: 2px 0 0; font-size: 12px; }
 #pick-status a { color: var(--accent, #0a84ff); text-decoration: underline; cursor: pointer; }
@@ -426,4 +436,5 @@ pre.cmd {
 @media (max-width: 1200px) {
   .layout { grid-template-columns: 1fr; }
   .result-grid { grid-template-columns: 1fr; }
+  .col-center, .col-right { position: static; }   /* 单栏布局不需要吸附 */
 }
